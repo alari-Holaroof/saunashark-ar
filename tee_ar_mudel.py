@@ -35,10 +35,32 @@ import bpy, bmesh, os, sys, struct
 
 VALJUND = os.path.dirname(os.path.abspath(__file__))
 
-# Eelarve. Alumine rida on mootdetud tootav punkt; jatame varu.
-SIHT_TRI   = 22000
-MAX_TIPPE  = 60000
-MAX_MB     = 3.0
+# ─────────────────────────────────────────────────────────────────────────────
+# EELARVE — MOOTDETUD, MITTE OLETATUD
+#
+# Esimene versioon siin oli SIHT_TRI=22000 / MAX_TIPPE=60000 / MAX_MB=3.0.
+# See oli NELI KORDA liiga range ja tegi mudelid asjata koledaks.
+#
+# Katsete rida iPhone'i Quick Lookiga, sama mudel eri astmetes:
+#
+#     tippe     kolmnurki   MB      tulemus
+#     219 000      73 024   5,80    EI AVANE
+#     169 478     138 549  10,24    avaneb          <- 10 MB avaneb!
+#      60 594      86 914   5,86    avaneb
+#      42 345      64 539   3,69    avaneb
+#      34 904      55 237   2,90    avaneb
+#      37 954      21 999   1,80    avaneb
+#
+# ★ MAHT EI OLE PIIRAJA. 10,24 MB avaneb, 5,80 MB ei avanenud — vahe on
+#   TIPPUDE arvus. Piir on kuskil 169 000 ja 219 000 tipu vahel.
+#   Kolmnurkade arv ei ennusta samuti: 138 549 avaneb, 73 024 ei avanenud.
+#
+# Seetottu on siin eelarve TIPUPOHINE ja kolmnurki puutume ainult siis,
+# kui tipud ule laheva. Varu on ~20% mootdetud piirist.
+SIHT_TIPPE = 140000
+MAX_TIPPE  = 160000
+SIHT_TRI   = 0        # 0 = kolmnurki ei piirata, ainult tipud loevad
+MAX_MB     = 14.0
 
 # Kui fail lubab, jaavad tekstuurid alles. Ule selle piiri visatakse minema.
 TEKSTUURID = True
@@ -127,19 +149,32 @@ for o in objs:
 t1, v1 = loenda(objs)
 L("keevitatud: %d tri, %d tippu" % (t1, v1))
 
-# --- 2. horenda kolmnurkade arv eelarvesse
-suhe = min(1.0, SIHT_TRI / float(t1)) if t1 else 1.0
-if suhe < 0.999:
+# --- 2. horenda AINULT siis, kui tipud ule eelarve
+#
+# Enamik mudeleid mahub keevitamise jarel ilma horenduseta ara. Iga tarbetu
+# horendus on nahtav kvaliteedikadu: esimene AR-mudel horendati 73k -> 22k
+# ilma vajaduseta ja nagi seetottu halb valja.
+if v1 > SIHT_TIPPE:
+    suhe = SIHT_TIPPE / float(v1)
+    L("tippe %d > %d -> horendan suhtega %.4f" % (v1, SIHT_TIPPE, suhe))
     for o in objs:
         bpy.context.view_layer.objects.active = o
         m = o.modifiers.new("H", "DECIMATE")
         m.decimate_type = "COLLAPSE"; m.ratio = suhe
         bpy.ops.object.modifier_apply(modifier=m.name)
     t1, v1 = loenda(objs)
-    L("horendatud (suhe %.4f): %d tri, %d tippu" % (suhe, t1, v1))
+    L("horendatud: %d tri, %d tippu" % (t1, v1))
+else:
+    L("mahub eelarvesse (%d <= %d tippu) -> HORENDUST EI TEHTA" % (v1, SIHT_TIPPE))
+
+if SIHT_TRI and t1 > SIHT_TRI:
+    L("  (kolmnurki %d > %d, aga see ei ole Quick Looki piiraja)" % (t1, SIHT_TRI))
 
 if v1 > MAX_TIPPE:
-    L("*** HOIATUS: %d tippu > %d — Quick Look voib keelduda ***" % (v1, MAX_TIPPE))
+    L("*** HOIATUS: %d tippu > %d — Quick Look voib keelduda.***" % (v1, MAX_TIPPE))
+    L("*** Kui mesh koosneb paljudest eraldi saartest (nt kivid), ei vii     ***")
+    L("*** COLLAPSE allapoole — vaja on vahendada SAARTE ARVU. Vt            ***")
+    L("*** tee_kvaliteet.py, kus keris laks 52 010 saarest 160 peale.        ***")
 
 # --- 3. gabariit, et AR-is oleks oige mootkava
 mn = [1e9] * 3; mx = [-1e9] * 3
