@@ -122,6 +122,15 @@ model-viewer{
 
   <div class="hoiatus" id="ar-puudub" style="display:none"></div>
 
+  <!-- Diagnostika. model-viewer teatab AR-i seisu `ar-status` sundmusega, aga
+       vaikimisi ei naita seda kusagil — kui AR takerdub, ei ole kasutajal ega
+       arendajal midagi kaes. Siin on ta nahtav, et vea saaks kirjeldada. -->
+  <div class="kast" id="ar-diag" style="display:none;margin-top:14px">
+    <h2>AR-i seis</h2>
+    <p id="ar-diag-rida" style="font-family:monospace;font-size:12.5px;color:#cfe8a0"></p>
+    <p id="ar-diag-seade" style="font-size:12px"></p>
+  </div>
+
   <div class="all">
     <div class="kast">
       <h2>Kuidas kasutada</h2>
@@ -184,6 +193,43 @@ model-viewer{
   // nupu parast ja ei saa aru, kas ta otsib valest kohast voi on midagi katki.
   // Utleme siis otse, mis puudu on.
   var mv = document.querySelector('model-viewer');
+
+  // Diagnostika: naitame AR-i seisu ekraanil. Ilmub alles siis, kui midagi
+  // juhtub, et see tavakasutajat ei segaks.
+  if (mv) {
+    var diag  = document.getElementById('ar-diag');
+    var rida  = document.getElementById('ar-diag-rida');
+    var seade = document.getElementById('ar-diag-seade');
+    var logi  = [];
+    var lisa = function(t){
+      logi.push(new Date().toLocaleTimeString('et-EE') + '  ' + t);
+      if (rida) rida.innerHTML = logi.slice(-6).join('<br>');
+      if (diag) diag.style.display = 'block';
+      if (seade) {
+        seade.textContent =
+          'canActivateAR=' + mv.canActivateAR +
+          ' · režiim=' + (mv.getAttribute('ar-modes') || '-') +
+          ' · ' + (/iPad|iPhone|iPod/.test(navigator.userAgent) ? 'iOS' :
+                   /Android/.test(navigator.userAgent) ? 'Android' : 'muu');
+      }
+    };
+    mv.addEventListener('ar-status', function(e){
+      var s = e.detail && e.detail.status ? e.detail.status : '?';
+      var selgitus = {
+        'session-started': 'AR käivitus, otsib pinda',
+        'object-placed'  : 'saun asetatud — töötab',
+        'failed'         : 'AR EBAÕNNESTUS',
+        'not-presenting' : 'AR suletud'
+      }[s] || s;
+      lisa(s + '  —  ' + selgitus);
+    });
+    mv.addEventListener('error', function(e){
+      lisa('MUDELI VIGA: ' + (e.detail && e.detail.type ? e.detail.type : '?'));
+    });
+    var arNupp = mv.querySelector('[slot="ar-button"]');
+    if (arNupp) arNupp.addEventListener('click', function(){ lisa('nupp vajutatud'); });
+  }
+
   if (mv && telefon) {
     var vaatanud = false;
     var kontrolli = function(){
