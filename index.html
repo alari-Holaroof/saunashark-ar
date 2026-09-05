@@ -120,6 +120,8 @@ model-viewer{
     <button slot="ar-button" class="ar-nupp" type="button">Vaata oma õues →</button>
   </model-viewer>
 
+  <div class="hoiatus" id="ar-puudub" style="display:none"></div>
+
   <div class="all">
     <div class="kast">
       <h2>Kuidas kasutada</h2>
@@ -175,7 +177,36 @@ model-viewer{
     var t = document.getElementById('turva');
     if (t) t.style.display = 'block';
   }
-  if (window.matchMedia('(pointer:coarse)').matches) return;
+  var telefon = window.matchMedia('(pointer:coarse)').matches;
+
+  // ★ Kui AR ei ole saadaval, PEIDAB model-viewer nupu vaikselt ara ja kasutaja
+  // naeb tuhja kohta. Telefonis on see halvim variant: ta tuli siia just selle
+  // nupu parast ja ei saa aru, kas ta otsib valest kohast voi on midagi katki.
+  // Utleme siis otse, mis puudu on.
+  var mv = document.querySelector('model-viewer');
+  if (mv && telefon) {
+    var vaatanud = false;
+    var kontrolli = function(){
+      if (vaatanud) return;
+      vaatanud = true;
+      if (mv.canActivateAR) return;          // nupp tuleb ise, koik korras
+      var k = document.getElementById('ar-puudub');
+      if (!k) return;
+      var ios = /iPad|iPhone|iPod/.test(navigator.userAgent);
+      k.innerHTML = ios
+        ? '<strong>AR ei avane selles brauseris.</strong> iPhone’is toimib ' +
+          'liitreaalsus ainult <strong>Safaris</strong> — kopeeri see aadress ' +
+          'Safarisse. Vajalik on iPhone 6s või uuem.'
+        : '<strong>AR ei ole selles seadmes saadaval.</strong> Androidis on vaja ' +
+          '<strong>Chrome’i</strong> ja rakendust „Google Play teenused ' +
+          'AR-i jaoks”. Mudelit saab ka ilma selleta sõrmega keerata ja suumida.';
+      k.style.display = 'block';
+    };
+    mv.addEventListener('load', kontrolli);
+    setTimeout(kontrolli, 9000);   // kui load jaab tulemata, utleme ikka
+  }
+
+  if (telefon) return;   // QR ainult arvutis
   var s = document.createElement('script');
   s.src = 'https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js';
   s.onload = function(){
